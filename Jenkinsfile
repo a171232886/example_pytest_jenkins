@@ -10,7 +10,7 @@ pipeline {
         // 获取 Git 提交 SHA
         GIT_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
         // Jenkins 构建结果 URL
-        BUILD_URL = env.BUILD_URL
+        BUILD_URL = "${env.BUILD_URL}"
     }
     tools {
         allure 'allure_2.34.1'
