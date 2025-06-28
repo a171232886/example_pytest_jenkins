@@ -1,85 +1,65 @@
 pipeline {
     agent {
         docker {
-            image 'python:3.12'  // 使用包含Python的Docker镜像
-            args '-v ${WORKSPACE}:/workspace'  // 挂载你的项目目录
+            image 'python:3.12'
+            args '-v ${WORKSPACE}:/workspace'
         }
     }
     environment {
-        // 直接引用凭据 ID（需提前配置）
-        GITHUB_TOKEN = credentials('Github') 
+        GITHUB_TOKEN = credentials('Github')
+        // 获取 Git 提交 SHA
+        GIT_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+        // Jenkins 构建结果 URL
+        BUILD_URL = env.BUILD_URL
     }
     tools {
-        allure 'allure_2.34.1' // 必须与全局工具配置中的名称一致
+        allure 'allure_2.34.1'
     }
     stages {
         stage('Setup') {
             steps {
-                sh 'bash env_install.sh'  // 安装项目依赖
-                sh 'nohup python utils/mock_server.py &'  // 后台启动被测试的服务
+                sh 'bash env_install.sh'
+                sh 'nohup python utils/mock_server.py &'
             }
         }
         stage('Test') {
             steps {
-                sh 'python main.py'  // 运行测试
+                sh 'python main.py'
             }
             post {
                 always {
                     allure([
                         reportBuildPolicy: 'ALWAYS',
-                        results: [[path: 'cache']] // 你的Allure结果目录
+                        results: [[path: 'cache']]
                     ])
+                    
+                    script {
+                        // 确定测试结果状态
+                        def testResult = currentBuild.currentResult
+                        def resultEmoji = testResult == 'SUCCESS' ? '✅' : '❌'
+                        def resultText = testResult == 'SUCCESS' ? '通过' : '失败'
+                        
+                        // 构建评论内容
+                        def comment = """
+                        ${resultEmoji} Jenkins 测试${resultText}
+                        
+                        构建详情: ${BUILD_URL}
+                        Allure 报告: ${BUILD_URL}allure/
+                        """
+                        
+                        // 调用 GitHub API 添加评论
+                        withCredentials([usernamePassword(credentialsId: 'Github', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                            sh """
+                                curl -s -X POST \
+                                -H "Authorization: token ${GITHUB_TOKEN}" \
+                                -H "Accept: application/vnd.github.v3+json" \
+                                https://api.github.com/repos/a171232886/example_pytest_jenkins/commits/${GIT_COMMIT}/comments \
+                                -d '{"body": "${comment}"}'
+                            """
+                        }
+                    }
                 }
             }
         }
-    }
-    post {
-        always {
-            script {
-                def testResult = getTestStatus()
-                def emoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
-                
-                addGitHubComment("""
-                ${emoji} Jenkins测试${testResult.status}
-                
-                详细结果: ${RESULT_LINK}
-                """)
-            }
-        }
-    }
-}
-
-// 获取测试状态摘要
-def getTestStatus() {
-    def result = [status: '完成', details: '']
-    try {
-        def testData = junit testResults: '**/target/surefire-reports/TEST-*.xml', allowEmptyResults: true
-        if(testData.totalCount > 0) {
-            result.status = testData.failCount == 0 ? '通过' : '失败'
-            result.details = "（${testData.totalCount}个用例，${testData.failCount}个失败）"
-        }
-    } catch(e) {
-        result.status = '状态未知'
-        result.details = '（无法解析测试结果）'
-    }
-    return result
-}
-
-// 添加GitHub评论
-def addGitHubComment(String message) {
-    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-        def payload = """
-        {
-            "body": "${message.trim().replaceAll('\n','\\\\n').replaceAll('"','\\\\"')}"
-        }
-        """
-        
-        sh """
-        curl -s -X POST \
-          -H "Authorization: token ${GITHUB_TOKEN}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          -d '${payload}' \
-          "https://api.github.com/repos/${env.GITHUB_REPO}/commits/${env.GIT_COMMIT}/comments"
-        """
     }
 }
