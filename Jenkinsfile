@@ -33,22 +33,4 @@ pipeline {
             }
         }
     }
-    post {
-        success {
-            script {
-                githubNotify context: 'ci/jenkins', 
-                            description: 'Build succeeded', 
-                            status: 'SUCCESS', 
-                            targetUrl: "${env.BUILD_URL}"
-            }
-        }
-        failure {
-            script {
-                githubNotify context: 'ci/jenkins', 
-                            description: 'Build failed', 
-                            status: 'FAILURE', 
-                            targetUrl: "${env.BUILD_URL}"
-            }
-        }
-    }
 }
