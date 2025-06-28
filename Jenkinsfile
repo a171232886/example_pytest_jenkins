@@ -35,27 +35,30 @@ pipeline {
                     ])
                     
                     script {
-                        // 确定测试结果状态
                         def testResult = currentBuild.currentResult
                         def resultEmoji = testResult == 'SUCCESS' ? '✅' : '❌'
                         def resultText = testResult == 'SUCCESS' ? '通过' : '失败'
                         
-                        // 构建评论内容（使用 stripIndent() 和 replaceAll() 处理格式）
-                        def comment = """
-                        ${resultEmoji} Jenkins 测试${resultText}
+                        // 构建评论内容（使用单引号避免变量插值）
+                        def comment = """${resultEmoji} Jenkins 测试${resultText}
+
+构建详情: ${env.BUILD_URL}
+Allure 报告: ${env.BUILD_URL}allure/"""
                         
-                        构建详情: ${env.BUILD_URL}
-                        Allure 报告: ${env.BUILD_URL}allure/
-                        """.stripIndent().trim().replaceAll('"', '\\\\"')
-                        
-                        // 调用 GitHub API 添加评论
-                        sh """
-                            curl -s -X POST \
-                            -H "Authorization: token ${env.GITHUB_TOKEN}" \
-                            -H "Accept: application/vnd.github.v3+json" \
-                            "https://api.github.com/repos/${env.GITHUB_REPO}/commits/${env.GIT_COMMIT}/comments" \
-                            -d '{"body": "${comment}"}'
-                        """
+                        // 安全地使用凭据（避免Groovy字符串插值）
+                        withCredentials([string(credentialsId: 'Github', variable: 'GITHUB_TOKEN')]) {
+                            // 使用临时文件存储JSON数据
+                            writeFile file: 'comment.json', text: groovy.json.JsonOutput.toJson([body: comment])
+                            
+                            sh '''#!/bin/bash
+                                curl -s -X POST \\
+                                -H "Authorization: token ${GITHUB_TOKEN}" \\
+                                -H "Accept: application/vnd.github.v3+json" \\
+                                -H "Content-Type: application/json" \\
+                                "https://api.github.com/repos/${GITHUB_REPO}/commits/${GIT_COMMIT}/comments" \\
+                                --data-binary @comment.json
+                            '''
+                        }
                     }
                 }
             }
