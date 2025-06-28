@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'python:3.12'  // 使用包含Python的Docker镜像
+            image 'example:v1'  // 使用包含Python的Docker镜像
             args '-v ${WORKSPACE}:/workspace'  // 挂载你的项目目录
         }
     }
