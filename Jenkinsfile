@@ -5,6 +5,10 @@ pipeline {
             args '-v ${WORKSPACE}:/workspace'  // 挂载你的项目目录
         }
     }
+    environment {
+        // 直接引用凭据 ID（需提前配置）
+        GITHUB_TOKEN = credentials('Github') 
+    }
     tools {
         allure 'allure_2.34.1' // 必须与全局工具配置中的名称一致
     }
@@ -26,6 +30,24 @@ pipeline {
                         results: [[path: 'cache']] // 你的Allure结果目录
                     ])
                 }
+            }
+        }
+    }
+    post {
+        success {
+            script {
+                githubNotify context: 'ci/jenkins', 
+                            description: 'Build succeeded', 
+                            status: 'SUCCESS', 
+                            targetUrl: "${env.BUILD_URL}"
+            }
+        }
+        failure {
+            script {
+                githubNotify context: 'ci/jenkins', 
+                            description: 'Build failed', 
+                            status: 'FAILURE', 
+                            targetUrl: "${env.BUILD_URL}"
             }
         }
     }
