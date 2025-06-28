@@ -5,10 +5,6 @@ pipeline {
             args '-v ${WORKSPACE}:/workspace'  // 挂载你的项目目录
         }
     }
-    environment {
-        // 直接引用凭据 ID（需提前配置）
-        GITHUB_TOKEN = credentials('Github') 
-    }
     tools {
         allure 'allure_2.34.1' // 必须与全局工具配置中的名称一致
     }
